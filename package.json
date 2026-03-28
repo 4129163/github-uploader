@@ -1,0 +1,38 @@
+{
+  "name": "github-uploader",
+  "version": "1.0.0",
+  "description": "GitHub 自动上传工具 - 支持 CLI 和飞书应用",
+  "main": "index.js",
+  "scripts": {
+    "install:cli": "cd cli-tool && npm install",
+    "install:feishu": "cd feishu-app && npm install",
+    "install:all": "npm run install:cli && npm run install:feishu",
+    "start:cli": "cd cli-tool && npm start",
+    "start:feishu": "cd feishu-app && npm run dev",
+    "build:feishu": "cd feishu-app && npm run build",
+    "test": "echo '测试脚本待添加'",
+    "lint": "echo '代码检查待添加'"
+  },
+  "keywords": [
+    "github",
+    "upload",
+    "openclaw",
+    "feishu",
+    "lark",
+    "automation"
+  ],
+  "author": "GitHub Uploader Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/4129163/github-uploader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/4129163/github-uploader/issues"
+  },
+  "homepage": "https://github.com/4129163/github-uploader#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
