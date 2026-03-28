@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd cli-tool && npm ci
+        cd ../feishu-app && npm ci
+    
+    - name: Run lint
+      run: npm run lint
+
+  test-cli:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install CLI dependencies
+      run: cd cli-tool && npm ci
+    
+    - name: Test CLI basic functionality
+      run: |
+        cd cli-tool
+        node -c index.js
+
+  test-feishu:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install Feishu App dependencies
+      run: cd feishu-app && npm ci
+    
+    - name: Build Feishu App
+      run: cd feishu-app && npm run build
