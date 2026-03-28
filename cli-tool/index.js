@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * GitHub 自动上传工具 - CLI 版本
- * 用于将 OpenClaw 资源上传到 GitHub 仓库
+ * 修复版：支持环境变量配置路径
  */
 
 const { Octokit } = require('@octokit/rest');
@@ -12,44 +12,29 @@ const { default: inquirer } = require('inquirer');
 const os = require('os');
 
 // =============================================================================
-// 配置
+// 配置 - 修复硬编码路径问题
 // =============================================================================
 
-// 获取下载目录（支持环境变量、命令行参数、默认路径）
+// 获取下载目录（优先级：环境变量 > 命令行参数 > 默认路径）
 function getDownloadsDir() {
-  // 优先级：环境变量 > 命令行参数 > 默认路径
-  const args = process.argv.slice(2);
-  const dirArg = args.find(arg => arg.startsWith('--dir='));
-  
-  if (dirArg) {
-    return dirArg.replace('--dir=', '');
-  }
-  
+  // 1. 环境变量
   if (process.env.DOWNLOADS_DIR) {
     return process.env.DOWNLOADS_DIR;
   }
   
-  // 默认路径：当前工作目录下的 downloads
-  return path.join(process.cwd(), 'downloads');
+  // 2. 命令行参数
+  const args = process.argv.slice(2);
+  const dirArg = args.find(arg => arg.startsWith('--dir='));
+  if (dirArg) {
+    return dirArg.replace('--dir=', '');
+  }
+  
+  // 3. 默认路径：脚本所在目录的 downloads
+  return path.join(__dirname, 'downloads');
 }
 
 const DOWNLOADS_DIR = getDownloadsDir();
 const TEMP_DIR = path.join(os.tmpdir(), 'github-uploader-temp');
-
-// 资源文件列表
-const RESOURCE_FILES = [
-  { name: '1-openclaw-main.zip', description: 'OpenClaw 主仓库' },
-  { name: '2-openclaw-dashboard.zip', description: 'Dashboard 源码' },
-  { name: '3-openclaw-dashboard-alt.zip', description: 'Dashboard 替代版本' },
-  { name: '4-frontend.tar.gz', description: '前端源码' },
-  { name: '5-backend-docs.tar.gz', description: '后端文档' },
-  { name: '6-docker-deploy.tar.gz', description: 'Docker 配置' },
-  { name: '7-full-package.tar.gz', description: '完整资源包' }
-];
-
-// =============================================================================
-// 工具函数
-// =============================================================================
 
 // 颜色代码
 const C = {
@@ -58,20 +43,10 @@ const C = {
   red: '\x1b[31m',
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
-  magenta: '\x1b[35m',
   reset: '\x1b[0m'
 };
 
-// 格式化文件大小
-function formatSize(bytes) {
-  if (bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-}
-
-// 打印欢迎信息
+// 工具函数
 function printWelcome() {
   console.log(`${C.cyan}
 ╔═══════════════════════════════════════════════════════════════╗
@@ -82,111 +57,66 @@ function printWelcome() {
 ╚═══════════════════════════════════════════════════════════════╝${C.reset}\n`);
 }
 
-// 打印错误信息
-function printError(message, details = '') {
-  console.error(`${C.red}\n❌ 错误: ${message}${C.reset}`);
-  if (details) {
-    console.error(`${C.yellow}详情: ${details}${C.reset}`);
-  }
-}
-
-// 打印成功信息
-function printSuccess(message) {
-  console.log(`${C.green}✓ ${message}${C.reset}`);
-}
-
-// 打印信息
-function printInfo(message) {
-  console.log(`${C.blue}ℹ ${message}${C.reset}`);
-}
-
-// 打印警告
-function printWarning(message) {
-  console.log(`${C.yellow}⚠ ${message}${C.reset}`);
-}
-
-// =============================================================================
-// 核心功能
-// =============================================================================
-
-// 检查下载目录
-async function checkDownloadsDir() {
-  printInfo(`检查下载目录: ${DOWNLOADS_DIR}`);
-  
-  if (!await fs.pathExists(DOWNLOADS_DIR)) {
-    printWarning(`下载目录不存在: ${DOWNLOADS_DIR}`);
-    const { createDir } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'createDir',
-      message: '是否创建该目录?',
-      default: true
-    }]);
-    
-    if (createDir) {
-      await fs.ensureDir(DOWNLOADS_DIR);
-      printSuccess(`已创建目录: ${DOWNLOADS_DIR}`);
-    } else {
-      printError('无法继续，请先准备资源文件');
-      printInfo(`你可以:\n  1. 手动创建目录: mkdir -p ${DOWNLOADS_DIR}\n  2. 指定其他目录: --dir=/path/to/downloads\n  3. 设置环境变量: export DOWNLOADS_DIR=/path/to/downloads`);
-      return null;
-    }
-  }
-  
-  return true;
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
 // 检查资源文件
-async function checkResources() {
-  console.log(`\n${C.magenta}📁 扫描资源文件...${C.reset}\n`);
+async function checkDownloads() {
+  console.log(`${C.blue}📁 检查资源目录: ${DOWNLOADS_DIR}${C.reset}\n`);
   
-  const existingFiles = [];
-  const missingFiles = [];
-  
-  for (const file of RESOURCE_FILES) {
-    const filePath = path.join(DOWNLOADS_DIR, file.name);
-    
-    if (await fs.pathExists(filePath)) {
-      try {
-        const stats = await fs.stat(filePath);
-        existingFiles.push({ 
-          name: file.name, 
-          description: file.description,
-          size: formatSize(stats.size), 
-          path: filePath 
-        });
-        console.log(`${C.green} ✓ ${file.name.padEnd(30)} ${formatSize(stats.size).padStart(10)}${C.reset}`);
-      } catch (err) {
-        printWarning(`无法读取文件 ${file.name}: ${err.message}`);
-        missingFiles.push(file);
-      }
-    } else {
-      missingFiles.push(file);
-    }
-  }
-  
-  console.log(`\n${C.cyan}─────────────────────────────────────────────────${C.reset}`);
-  printInfo(`找到 ${existingFiles.length}/${RESOURCE_FILES.length} 个资源文件`);
-  
-  if (existingFiles.length === 0) {
-    printError('没有找到任何资源文件');
-    printInfo(`请将资源文件放入: ${DOWNLOADS_DIR}\n资源下载地址: https://github.com/4129163/openclaw-resources`);
+  // 检查目录是否存在
+  if (!await fs.pathExists(DOWNLOADS_DIR)) {
+    console.log(`${C.red}✗ 资源目录不存在: ${DOWNLOADS_DIR}${C.reset}\n`);
+    console.log(`${C.yellow}解决方法:${C.reset}`);
+    console.log('  1. 创建目录: mkdir -p ' + DOWNLOADS_DIR);
+    console.log('  2. 设置环境变量: export DOWNLOADS_DIR=/path/to/downloads');
+    console.log('  3. 使用参数: npm start -- --dir=/path/to/downloads\n');
     return null;
   }
   
-  if (missingFiles.length > 0) {
-    printWarning(`缺失 ${missingFiles.length} 个文件，将继续使用现有文件`);
+  const files = [
+    '1-openclaw-main.zip', '2-openclaw-dashboard.zip', '3-openclaw-dashboard-alt.zip',
+    '4-frontend.tar.gz', '5-backend-docs.tar.gz', '6-docker-deploy.tar.gz', '7-full-package.tar.gz'
+  ];
+  
+  const existingFiles = [];
+  
+  for (const file of files) {
+    const filePath = path.join(DOWNLOADS_DIR, file);
+    if (await fs.pathExists(filePath)) {
+      try {
+        const stats = await fs.stat(filePath);
+        existingFiles.push({ name: file, size: formatSize(stats.size), path: filePath });
+        console.log(`${C.green} ✓ ${file.padEnd(30)} ${formatSize(stats.size).padStart(10)}${C.reset}`);
+      } catch (err) {
+        console.log(`${C.yellow} ⚠ ${file} (读取失败)${C.reset}`);
+      }
+    }
   }
   
+  if (existingFiles.length === 0) {
+    console.log(`${C.red}✗ 未找到任何资源文件${C.reset}\n`);
+    console.log(`${C.yellow}请确保资源文件存在于: ${DOWNLOADS_DIR}${C.reset}\n`);
+    console.log(`${C.blue}资源下载地址: https://github.com/4129163/openclaw-resources${C.reset}\n`);
+    return null;
+  }
+  
+  console.log(`${C.green}\n ✓ 共找到 ${existingFiles.length} 个资源文件${C.reset}\n`);
   return existingFiles;
 }
 
 // 获取 GitHub Token
 async function getGitHubToken() {
-  console.log(`\n${C.magenta}🔐 GitHub 认证设置${C.reset}\n`);
+  console.log(`${C.blue}🔐 GitHub 认证设置${C.reset}\n`);
   
   // 检查环境变量
   if (process.env.GITHUB_TOKEN) {
-    printInfo('从环境变量读取到 GitHub Token');
+    console.log(`${C.green}✓ 从环境变量读取到 GitHub Token${C.reset}`);
     const { useEnvToken } = await inquirer.prompt([{
       type: 'confirm',
       name: 'useEnvToken',
@@ -202,7 +132,7 @@ async function getGitHubToken() {
   console.log(`${C.yellow}请按以下步骤获取 GitHub Personal Access Token：${C.reset}`);
   console.log(' 1. 访问 https://github.com/settings/tokens');
   console.log(' 2. 点击 "Generate new token (classic)"');
-  console.log(' 3. 选择权限：\x1b[32mrepo\x1b[33m（完全控制私有仓库）');
+  console.log(' 3. 勾选权限: repo (完全控制私有仓库)');
   console.log(' 4. 生成并复制 Token\n');
   
   const { token } = await inquirer.prompt([{
@@ -211,9 +141,7 @@ async function getGitHubToken() {
     message: '请输入 GitHub Personal Access Token:',
     mask: '*',
     validate: (input) => {
-      if (!input || input.length === 0) {
-        return 'Token 不能为空';
-      }
+      if (!input || input.length === 0) return 'Token 不能为空';
       if (!input.startsWith('ghp_') && !input.startsWith('github_pat_')) {
         return 'Token 格式不正确，应以 ghp_ 或 github_pat_ 开头';
       }
@@ -226,23 +154,23 @@ async function getGitHubToken() {
 
 // 验证 Token
 async function verifyToken(token) {
-  printInfo('正在验证 Token...');
+  console.log(`${C.blue}正在验证 Token...${C.reset}`);
   
   try {
     const octokit = new Octokit({ auth: token });
     const { data: user } = await octokit.rest.users.getAuthenticated();
     
-    printSuccess(`认证成功！欢迎 ${user.login}`);
-    printInfo(`用户邮箱: ${user.email || '未公开'}`);
-    
+    console.log(`${C.green}✓ 认证成功！欢迎 ${user.login}${C.reset}\n`);
     return { octokit, user };
   } catch (error) {
     if (error.status === 401) {
-      printError('Token 无效或已过期', '请检查 Token 是否正确，或重新生成');
+      console.log(`${C.red}✗ Token 无效或已过期${C.reset}`);
+      console.log(`${C.yellow}请检查 Token 是否正确，或重新生成${C.reset}\n`);
     } else if (error.status === 403) {
-      printError('API 速率限制', '请稍后再试');
+      console.log(`${C.red}✗ API 速率限制${C.reset}`);
+      console.log(`${C.yellow}请稍后再试${C.reset}\n`);
     } else {
-      printError('验证失败', error.message);
+      console.log(`${C.red}✗ 验证失败: ${error.message}${C.reset}\n`);
     }
     return null;
   }
@@ -250,7 +178,7 @@ async function verifyToken(token) {
 
 // 选择或创建仓库
 async function selectRepository(octokit, user) {
-  console.log(`\n${C.magenta}📦 仓库设置${C.reset}\n`);
+  console.log(`${C.blue}📦 仓库设置${C.reset}\n`);
   
   const { action } = await inquirer.prompt([{
     type: 'list',
@@ -265,7 +193,7 @@ async function selectRepository(octokit, user) {
   if (action === 'create') {
     const defaultName = process.env.DEFAULT_REPO_NAME || 'openclaw-resources';
     
-    const { repoName, description, isPrivate } = await inquirer.prompt([
+    const { repoName, isPrivate } = await inquirer.prompt([
       {
         type: 'input',
         name: 'repoName',
@@ -278,12 +206,6 @@ async function selectRepository(octokit, user) {
         }
       },
       {
-        type: 'input',
-        name: 'description',
-        message: '仓库描述（可选）:',
-        default: 'OpenClaw 源码资源集合'
-      },
-      {
         type: 'confirm',
         name: 'isPrivate',
         message: '是否设为私有仓库?',
@@ -291,37 +213,36 @@ async function selectRepository(octokit, user) {
       }
     ]);
     
-    printInfo(`正在创建仓库: ${repoName}...`);
+    console.log(`${C.blue}正在创建仓库: ${repoName}...${C.reset}`);
     
     try {
       const { data: repo } = await octokit.rest.repos.createForAuthenticatedUser({
         name: repoName,
-        description: description,
+        description: 'OpenClaw 源码资源集合',
         private: isPrivate,
-        auto_init: true,
-        gitignore_template: 'Node'
+        auto_init: true
       });
       
-      printSuccess(`仓库创建成功: ${repo.html_url}`);
+      console.log(`${C.green}✓ 仓库创建成功: ${repo.html_url}${C.reset}\n`);
       return repo;
     } catch (error) {
       if (error.status === 422) {
-        printError('仓库创建失败', '仓库名称可能已存在或包含非法字符');
+        console.log(`${C.red}✗ 仓库创建失败: 仓库名称可能已存在${C.reset}\n`);
       } else {
-        printError('仓库创建失败', error.message);
+        console.log(`${C.red}✗ 仓库创建失败: ${error.message}${C.reset}\n`);
       }
       return null;
     }
   } else {
     try {
-      printInfo('正在获取仓库列表...');
+      console.log(`${C.blue}正在获取仓库列表...${C.reset}`);
       const { data: repos } = await octokit.rest.repos.listForAuthenticatedUser({ 
         per_page: 100,
         sort: 'updated'
       });
       
       if (repos.length === 0) {
-        printWarning('没有现有仓库，将创建新仓库');
+        console.log(`${C.yellow}没有现有仓库，将创建新仓库${C.reset}\n`);
         return selectRepository(octokit, user);
       }
       
@@ -330,15 +251,15 @@ async function selectRepository(octokit, user) {
         name: 'selectedRepo',
         message: '选择要上传到的仓库:',
         choices: repos.map(r => ({
-          name: `${r.full_name} ${r.private ? '🔒' : '🌐'} ${r.description || ''}`,
+          name: `${r.full_name} ${r.private ? '🔒' : '🌐'}`,
           value: r
         }))
       }]);
       
-      printSuccess(`已选择仓库: ${selectedRepo.full_name}`);
+      console.log(`${C.green}✓ 已选择仓库: ${selectedRepo.full_name}${C.reset}\n`);
       return selectedRepo;
     } catch (error) {
-      printError('获取仓库列表失败', error.message);
+      console.log(`${C.red}✗ 获取仓库列表失败: ${error.message}${C.reset}\n`);
       return null;
     }
   }
@@ -346,10 +267,9 @@ async function selectRepository(octokit, user) {
 
 // 准备上传文件
 async function prepareFiles(files) {
-  console.log(`\n${C.magenta}📂 准备上传文件...${C.reset}\n`);
+  console.log(`${C.blue}📂 准备上传文件...${C.reset}\n`);
   
   try {
-    // 清理并创建临时目录
     await fs.remove(TEMP_DIR);
     await fs.ensureDir(TEMP_DIR);
     
@@ -357,7 +277,7 @@ async function prepareFiles(files) {
     const readmePath = path.join(DOWNLOADS_DIR, '0-README.md');
     if (await fs.pathExists(readmePath)) {
       await fs.copy(readmePath, path.join(TEMP_DIR, 'README.md'));
-      printSuccess('已复制说明文档');
+      console.log(`${C.green} ✓ 已复制说明文档${C.reset}`);
     }
     
     // 创建资源目录
@@ -368,58 +288,53 @@ async function prepareFiles(files) {
     for (const file of files) {
       const destPath = path.join(resourcesDir, file.name);
       await fs.copy(file.path, destPath);
-      printSuccess(`已复制 ${file.name}`);
+      console.log(`${C.green} ✓ 已复制 ${file.name}${C.reset}`);
     }
     
-    printSuccess('文件准备完成');
+    console.log(`${C.green}\n ✓ 文件准备完成${C.reset}\n`);
     return TEMP_DIR;
   } catch (error) {
-    printError('文件准备失败', error.message);
+    console.log(`${C.red}✗ 文件准备失败: ${error.message}${C.reset}\n`);
     return null;
   }
 }
 
 // 上传到 GitHub
 async function uploadToGitHub(repo, tempDir, user, token) {
-  console.log(`\n${C.magenta}☁️ 开始上传到 GitHub...${C.reset}\n`);
+  console.log(`${C.blue}☁️ 开始上传到 GitHub...${C.reset}\n`);
   
   const repoUrl = `https://${token}@github.com/${repo.full_name}.git`;
   const git = simpleGit(tempDir);
   
   try {
-    // 初始化 git
-    printInfo('初始化 Git 仓库...');
     await git.init();
     await git.addRemote('origin', repoUrl);
     
-    // 配置用户信息
     const email = user.email || `${user.login}@users.noreply.github.com`;
     await git.addConfig('user.email', email);
     await git.addConfig('user.name', user.login);
     
-    // 添加文件
-    printInfo('添加文件到暂存区...');
     await git.add('.');
+    console.log(`${C.green} ✓ 添加文件到暂存区${C.reset}`);
     
-    // 提交
-    printInfo('创建提交...');
-    await git.commit('📦 Upload OpenClaw resources\n\n自动上传 OpenClaw 相关资源文件');
-    printSuccess('提交创建成功');
+    await git.commit('📦 Upload OpenClaw resources');
+    console.log(`${C.green} ✓ 创建提交${C.reset}`);
     
-    // 推送
     const defaultBranch = repo.default_branch || 'main';
-    printInfo(`推送到 ${defaultBranch} 分支...`);
     await git.push('origin', `HEAD:${defaultBranch}`, ['--force']);
-    printSuccess('推送成功');
+    console.log(`${C.green} ✓ 推送到 ${defaultBranch} 分支${C.reset}`);
     
+    console.log(`${C.green}\n✅ 上传成功！${C.reset}\n`);
     return true;
   } catch (error) {
     if (error.message.includes('Could not resolve host')) {
-      printError('网络连接失败', '请检查网络连接或代理设置');
+      console.log(`${C.red}✗ 网络连接失败${C.reset}`);
+      console.log(`${C.yellow}请检查网络连接或代理设置${C.reset}\n`);
     } else if (error.message.includes('Authentication failed')) {
-      printError('认证失败', '请检查 Token 是否有效');
+      console.log(`${C.red}✗ 认证失败${C.reset}`);
+      console.log(`${C.yellow}请检查 Token 是否有效${C.reset}\n`);
     } else {
-      printError('上传失败', error.message);
+      console.log(`${C.red}✗ 上传失败: ${error.message}${C.reset}\n`);
     }
     return false;
   }
@@ -429,49 +344,16 @@ async function uploadToGitHub(repo, tempDir, user, token) {
 async function cleanup() {
   try {
     await fs.remove(TEMP_DIR);
-    printInfo('已清理临时文件');
-  } catch (e) {
-    // 忽略清理错误
-  }
+  } catch (e) {}
 }
 
-// 打印完成信息
-function printCompletion(repo) {
-  console.log(`
-${C.green}╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║                    🎉 上传成功！                              ║
-║                                                               ║
-╠═══════════════════════════════════════════════════════════════╣
-║                                                               ║
-║  📎 仓库地址: ${repo.html_url.padEnd(46)} ║
-║  🌐 访问链接: ${`https://github.com/${repo.full_name}`.padEnd(46)} ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝${C.reset}
-
-${C.cyan}✨ 你可以通过以下命令克隆仓库:${C.reset}
-  git clone ${repo.clone_url}
-
-${C.cyan}📖 资源说明:${C.reset}
-  所有资源文件已上传到 resources/ 目录
-`);
-}
-
-// =============================================================================
 // 主函数
-// =============================================================================
-
 async function main() {
   printWelcome();
   
   try {
-    // 检查下载目录
-    if (!await checkDownloadsDir()) {
-      process.exit(1);
-    }
-    
     // 检查资源文件
-    const files = await checkResources();
+    const files = await checkDownloads();
     if (!files) {
       process.exit(1);
     }
@@ -497,21 +379,23 @@ async function main() {
     
     // 上传
     const success = await uploadToGitHub(repo, tempDir, auth.user, token);
-    
-    // 清理
     await cleanup();
     
     if (success) {
-      printCompletion(repo);
+      console.log(`${C.cyan}
+╔═══════════════════════════════════════════════════════════════╗
+║                    🎉 上传成功！                              ║
+║                                                               ║
+║  📎 仓库地址: ${repo.html_url.padEnd(46)} ║
+║  🌐 访问链接: ${`https://github.com/${repo.full_name}`.padEnd(46)} ║
+╚═══════════════════════════════════════════════════════════════╝${C.reset}
+`);
     } else {
       process.exit(1);
     }
     
   } catch (error) {
-    printError('程序运行出错', error.message);
-    if (process.env.DEBUG) {
-      console.error(error.stack);
-    }
+    console.log(`${C.red}\n❌ 错误: ${error.message}${C.reset}\n`);
     await cleanup();
     process.exit(1);
   }
@@ -519,14 +403,13 @@ async function main() {
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {
-  printError('未捕获的异常', error.message);
+  console.error(`${C.red}未捕获的异常: ${error.message}${C.reset}`);
   cleanup().then(() => process.exit(1));
 });
 
 process.on('unhandledRejection', (reason) => {
-  printError('未处理的 Promise 拒绝', reason);
-  cleanup().then(() => process.exit(1));
+  console.error(`${C.red}未处理的 Promise: ${reason}${C.reset}`);
 });
 
-// 运行主程序
+// 运行
 main();
