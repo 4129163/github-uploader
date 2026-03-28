@@ -1,0 +1,79 @@
+{
+  "schema": "2.0",
+  "header": {
+    "title": {
+      "tag": "plain_text",
+      "content": "🚀 GitHub 自动上传工具"
+    },
+    "subtitle": {
+      "tag": "plain_text",
+      "content": "将 OpenClaw 源码上传到你的 GitHub"
+    },
+    "template": "blue"
+  },
+  "elements": [
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "**📦 待上传资源**\n共 7 个文件，总计约 88MB"
+      }
+    },
+    {
+      "tag": "div",
+      "fields": [
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "📄 openclaw-main.zip\n📊 dashboard.zip\n🎨 dashboard-alt.zip\n⚛️ frontend.tar.gz"
+          }
+        },
+        {
+          "is_short": true,
+          "text": {
+            "tag": "lark_md",
+            "content": "📚 backend-docs.tar.gz\n🐳 docker-deploy.tar.gz\n📦 full-package.tar.gz"
+          }
+        }
+      ]
+    },
+    {
+      "tag": "hr"
+    },
+    {
+      "tag": "div",
+      "text": {
+        "tag": "lark_md",
+        "content": "**🔐 配置信息**\n需要你的 GitHub Personal Access Token"
+      }
+    },
+    {
+      "tag": "action",
+      "actions": [
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "🚀 开始上传"
+          },
+          "type": "primary",
+          "value": {
+            "action": "start_upload"
+          }
+        },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "📖 使用说明"
+          },
+          "type": "default",
+          "value": {
+            "action": "show_help"
+          }
+        }
+      ]
+    }
+  ]
+}
