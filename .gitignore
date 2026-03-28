@@ -1,0 +1,72 @@
+# =============================================================================
+# GitHub Uploader - Git 忽略文件
+# =============================================================================
+
+# 依赖目录
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.*.local
+
+# 临时文件和目录
+temp_upload/
+temp/
+tmp/
+*.tmp
+
+# 日志文件
+logs/
+*.log
+log/
+
+# 操作系统文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# 构建输出
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# 测试覆盖率
+coverage/
+.nyc_output/
+
+# 下载的资源文件（可选忽略）
+downloads/*.zip
+downloads/*.tar.gz
+downloads/*.tar
+!downloads/.gitkeep
+
+# PM2 日志
+.pm2/
+
+# 其他
+*.pid
+*.seed
+*.pid.lock
+.cache/
