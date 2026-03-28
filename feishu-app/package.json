@@ -1,0 +1,28 @@
+{
+  "name": "feishu-github-uploader",
+  "version": "1.0.0",
+  "description": "飞书妙搭 GitHub 自动上传应用",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/main.js",
+    "dev": "ts-node src/main.ts"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.39.0",
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@octokit/rest": "^20.0.2",
+    "simple-git": "^3.21.0",
+    "fs-extra": "^11.1.1",
+    "reflect-metadata": "^0.1.13",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/fs-extra": "^11.0.4",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
+  }
+}
